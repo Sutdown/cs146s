@@ -9,7 +9,20 @@ load_dotenv()
 NUM_RUNS_TIMES = 5
 
 # TODO: Fill this in! Try to get as close to 100% correctness across all runs as possible.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """You are a math expert. When solving problems:
+
+1. Think step-by-step and show your reasoning
+2. On the VERY LAST LINE, output ONLY the answer in this exact format:
+   Answer: <number>
+3. Do NOT include any other text, symbols, or punctuation after the number
+
+Example:
+If the answer is 42, your last line must be:
+Answer: 42
+
+NOT "Answer: 42." or "Answer: $42$" or any other variation.
+"""
+
 
 USER_PROMPT = """
 Solve this problem, then give the final answer on the last line as "Answer: <number>".
@@ -48,14 +61,14 @@ def test_your_prompt(system_prompt: str) -> bool:
     for idx in range(NUM_RUNS_TIMES):
         print(f"Running test {idx + 1} of {NUM_RUNS_TIMES}")
         response = chat(
-            model="llama3.1:8b",
+            model="mistral-nemo:12b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": USER_PROMPT},
             ],
             options={"temperature": 1},
         )
-        output_text = response.message.content
+        output_text = response.message.content or ""
         final_answer = extract_final_answer(output_text)
         print(f"Run {idx + 1} answer: {final_answer}")
         answers.append(final_answer.strip())
@@ -81,6 +94,6 @@ def test_your_prompt(system_prompt: str) -> bool:
 
 
 if __name__ == "__main__":
-    test_your_prompt(YOUR_SYSTEM_PROMPT)
+    _ = test_your_prompt(YOUR_SYSTEM_PROMPT)
 
 

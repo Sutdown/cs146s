@@ -1,7 +1,7 @@
 import ast
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Callable 
 
 from dotenv import load_dotenv
 from ollama import chat
@@ -14,7 +14,7 @@ NUM_RUNS_TIMES = 3
 # ==========================
 # Tool implementation (the "executor")
 # ==========================
-def _annotation_to_str(annotation: Optional[ast.AST]) -> str:
+def _annotation_to_str(annotation: ast.AST | None) -> str:
     if annotation is None:
         return "None"
     try:
@@ -26,11 +26,11 @@ def _annotation_to_str(annotation: Optional[ast.AST]) -> str:
         return type(annotation).__name__
 
 
-def _list_function_return_types(file_path: str) -> List[Tuple[str, str]]:
+def _list_function_return_types(file_path: str) -> list[tuple[str, str]]:
     with open(file_path, "r", encoding="utf-8") as f:
         source = f.read()
     tree = ast.parse(source)
-    results: List[Tuple[str, str]] = []
+    results: list[tuple[str, str]] = []
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
             return_str = _annotation_to_str(node.returns)
@@ -40,7 +40,7 @@ def _list_function_return_types(file_path: str) -> List[Tuple[str, str]]:
     return results
 
 
-def output_every_func_return_type(file_path: str = None) -> str:
+def output_every_func_return_type(file_path: str) -> str:
     """Tool: Return a newline-delimited list of "name: return_type" for each top-level function."""
     path = file_path or __file__
     if not os.path.isabs(path):
@@ -61,7 +61,7 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 # Tool registry for dynamic execution by name
-TOOL_REGISTRY: Dict[str, Callable[..., str]] = {
+TOOL_REGISTRY: dict[str, Callable[..., str]] = {
     "output_every_func_return_type": output_every_func_return_type,
 }
 
@@ -70,7 +70,29 @@ TOOL_REGISTRY: Dict[str, Callable[..., str]] = {
 # ==========================
 
 # TODO: Fill this in!
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """You are an AI assistant that can call tools by outputting JSON.
+
+AVAILABLE TOOLS:
+1. output_every_func_return_type(file_path: str) -> str
+   Description: Returns a newline-delimited list of "function_name: return_type" for all top-level functions in the given Python file.
+
+OUTPUT FORMAT:
+You MUST output a valid JSON object with exactly two keys:
+- "tool": The name of the tool to call (string)
+- "args": A dictionary of arguments (object)
+
+EXAMPLE INPUT:
+The user says: "Call the tool now."
+
+EXAMPLE OUTPUT:
+{"tool": "output_every_func_return_type", "args": {"file_path": "tool_calling.py"}}
+
+CRITICAL RULES:
+1. Output ONLY the JSON object, no other text
+2. The JSON must be valid (no trailing commas, proper quotes)
+3. Use the exact tool name as shown above
+4. Include all required arguments in "args"
+"""
 
 
 def resolve_path(p: str) -> str:
@@ -84,7 +106,7 @@ def resolve_path(p: str) -> str:
     return p
 
 
-def extract_tool_call(text: str) -> Dict[str, Any]:
+def extract_tool_call(text: str) -> dict[str, Any]:
     """Parse a single JSON object from the model output."""
     text = text.strip()
     # Some models wrap JSON in code fences; attempt to strip
@@ -99,20 +121,20 @@ def extract_tool_call(text: str) -> Dict[str, Any]:
         raise ValueError("Model did not return valid JSON for the tool call")
 
 
-def run_model_for_tool_call(system_prompt: str) -> Dict[str, Any]:
+def run_model_for_tool_call(system_prompt: str) -> dict[str, Any]:
     response = chat(
-        model="llama3.1:8b",
+        model="mistral-nemo:12b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "Call the tool now."},
         ],
         options={"temperature": 0.3},
     )
-    content = response.message.content
+    content = response.message.content or ""
     return extract_tool_call(content)
 
 
-def execute_tool_call(call: Dict[str, Any]) -> str:
+def execute_tool_call(call: dict[str, Any]) -> str:
     name = call.get("tool")
     if not isinstance(name, str):
         raise ValueError("Tool call JSON missing 'tool' string")
@@ -165,4 +187,4 @@ def test_your_prompt(system_prompt: str) -> bool:
 
 
 if __name__ == "__main__":
-    test_your_prompt(YOUR_SYSTEM_PROMPT)
+    _ = test_your_prompt(YOUR_SYSTEM_PROMPT)
