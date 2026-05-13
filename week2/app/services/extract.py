@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import os
-import re
-from typing import List
 import json
-from typing import Any
+import logging
+import re
+from typing import List, Any
+
 from ollama import chat
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -87,3 +91,94 @@ def _looks_imperative(sentence: str) -> bool:
         "investigate",
     }
     return first.lower() in imperative_starters
+
+
+def extract_action_items_llm(text: str) -> List[str]:
+    """
+    Extract action items using LLM (Ollama).
+
+    Args:
+        text: Input text containing notes.
+
+    Returns:
+        List of extracted action item strings.
+    """
+    if not text.strip():
+        return []
+
+    prompt = f"""You are an action item extractor. Your task is to identify all actionable items (tasks, todos, things to do) from the text below and return them as a JSON array.
+
+Each item should be a clear, concise task description without prefixes like "- ", "* ", "[ ]", "TODO:", etc.
+
+Input text:
+{text}
+
+Return a JSON array of strings only. Example:
+["week1", "week2", "week3", "week4"]
+
+JSON array:"""
+
+    try:
+        response = chat(
+            model="mistral-nemo:12b",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            options={"temperature": 0.1},
+        )
+
+        raw_output = response.message.content or "[]"
+        logger.info(f"LLM raw output: {raw_output}")  # Debug
+
+        # Try to extract JSON from the response (handle markdown code blocks)
+        json_str = raw_output.strip()
+        
+        # Remove markdown code blocks if present
+        if json_str.startswith("```"):
+            # Remove ```json or ``` at the start
+            json_str = json_str.split("```")[1] if "```" in json_str else json_str
+            # Remove language identifier if present (e.g., "json")
+            json_str = json_str.lstrip("json\n").lstrip("json")
+        
+        # Try to parse the JSON
+        result = json.loads(json_str)
+
+        # Ensure result is a list
+        if isinstance(result, dict) and "items" in result:
+            items = result["items"]
+        elif isinstance(result, list):
+            items = result
+        else:
+            items = []
+
+        # Clean up items - remove checkbox markers and prefixes
+        cleaned_items: List[str] = []
+        for item in items:
+            if isinstance(item, str):
+                cleaned = item.strip()
+                # Remove common prefixes
+                cleaned = re.sub(r"^[\-\*\•]+\s*", "", cleaned)
+                cleaned = re.sub(r"^\[.\]\s*", "", cleaned)
+                cleaned = re.sub(r"^todo\d*:\s*", "", cleaned, flags=re.IGNORECASE)
+                cleaned = cleaned.strip()
+                if cleaned:
+                    cleaned_items.append(cleaned)
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique: List[str] = []
+        for item in cleaned_items:
+            lowered = item.lower()
+            if lowered and lowered not in seen:
+                seen.add(lowered)
+                unique.append(item)
+
+        return unique
+
+    except Exception as e:
+        logger.error(f"LLM extraction failed: {e}")
+        # Fallback to rule-based extraction
+        return extract_action_items(text)
