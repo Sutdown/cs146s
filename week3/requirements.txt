@@ -1,0 +1,11 @@
+# MCP Weather Server 依赖
+
+# MCP 协议库
+mcp>=1.0.0
+
+# HTTP 客户端
+httpx>=0.25.0
+
+# 测试
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
