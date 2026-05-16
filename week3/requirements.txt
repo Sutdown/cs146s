@@ -6,6 +6,10 @@ mcp>=1.0.0
 # HTTP 客户端
 httpx>=0.25.0
 
+# HTTP 服务器 (HTTP 模式)
+uvicorn>=0.25.0
+starlette>=0.35.0
+
 # 测试
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
