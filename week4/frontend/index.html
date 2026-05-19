@@ -17,6 +17,18 @@
           <input id="note-content" placeholder="Content" required />
           <button type="submit">Add</button>
         </form>
+        <form id="search-form">
+          <input id="search-input" placeholder="Search notes..." />
+          <button type="submit">Search</button>
+          <button type="button" id="clear-search">Clear</button>
+        </form>
+        <div id="edit-form" style="display:none;">
+          <h3>Edit Note</h3>
+          <input id="edit-title" placeholder="Title" />
+          <input id="edit-content" placeholder="Content" />
+          <button type="button" id="save-edit">Save</button>
+          <button type="button" id="cancel-edit">Cancel</button>
+        </div>
         <ul id="notes"></ul>
       </section>
 
@@ -30,6 +42,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>

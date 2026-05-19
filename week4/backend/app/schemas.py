@@ -6,6 +6,11 @@ class NoteCreate(BaseModel):
     content: str
 
 
+class NoteUpdate(BaseModel):
+    title: str | None = None
+    content: str | None = None
+
+
 class NoteRead(BaseModel):
     id: int
     title: str

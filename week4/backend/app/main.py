@@ -29,6 +29,11 @@ async def root() -> FileResponse:
     return FileResponse("frontend/index.html")
 
 
+@app.get("/app.js")
+async def app_js() -> FileResponse:
+    return FileResponse("frontend/app.js")
+
+
 # Routers
 app.include_router(notes_router.router)
 app.include_router(action_items_router.router)
