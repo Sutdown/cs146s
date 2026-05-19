@@ -34,6 +34,11 @@ async def app_js() -> FileResponse:
     return FileResponse("frontend/app.js")
 
 
+@app.get("/styles.css")
+async def styles_css() -> FileResponse:
+    return FileResponse("frontend/styles.css")
+
+
 # Routers
 app.include_router(notes_router.router)
 app.include_router(action_items_router.router)
