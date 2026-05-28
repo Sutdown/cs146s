@@ -1,4 +1,6 @@
+import shlex
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import asc, desc, select, text
@@ -69,15 +71,16 @@ def get_note(note_id: int, db: Session = Depends(get_db)) -> NoteRead:
 @router.get("/unsafe-search", response_model=list[NoteRead])
 def unsafe_search(q: str, db: Session = Depends(get_db)) -> list[NoteRead]:
     sql = text(
-        f"""
+        """
         SELECT id, title, content, created_at, updated_at
         FROM notes
-        WHERE title LIKE '%{q}%' OR content LIKE '%{q}%'
+        WHERE title LIKE :q OR content LIKE :q
         ORDER BY created_at DESC
         LIMIT 50
         """
     )
-    rows = db.execute(sql).all()
+    rows = db.execute(sql, {"q": f"%{q}%"}).all()
+
     results: list[NoteRead] = []
     for r in rows:
         results.append(
@@ -101,7 +104,8 @@ def debug_hash_md5(q: str) -> dict[str, str]:
 
 @router.get("/debug/eval")
 def debug_eval(expr: str) -> dict[str, str]:
-    result = str(eval(expr))  # noqa: S307
+    # 修复：将 eval() 的 __builtins__ 替换为空字典，阻断 __import__ / open 等危险函数
+    result = str(eval(expr, {"__builtins__": {}}))  # noqa: S307
     return {"result": result}
 
 
@@ -109,7 +113,8 @@ def debug_eval(expr: str) -> dict[str, str]:
 def debug_run(cmd: str) -> dict[str, str]:
     import subprocess
 
-    completed = subprocess.run(cmd, shell=True, capture_output=True, text=True)  # noqa: S602,S603
+    # 修复：去掉 shell=True，改用 shlex.split 将命令字符串安全拆分为参数列表
+    completed = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
     return {"returncode": str(completed.returncode), "stdout": completed.stdout, "stderr": completed.stderr}
 
 
@@ -117,6 +122,10 @@ def debug_run(cmd: str) -> dict[str, str]:
 def debug_fetch(url: str) -> dict[str, str]:
     from urllib.request import urlopen
 
+    # 修复：解析 URL 并只允许 http / https 协议，阻断 file:// / ftp:// 等
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http:// and https:// URLs are allowed")
     with urlopen(url) as res:  # noqa: S310
         body = res.read(1024).decode(errors="ignore")
     return {"snippet": body}
@@ -124,9 +133,22 @@ def debug_fetch(url: str) -> dict[str, str]:
 
 @router.get("/debug/read")
 def debug_read(path: str) -> dict[str, str]:
+    import os
+
+    # 修复：将路径限制在项目根目录内，阻断 ../../etc/passwd 这类目录穿越攻击
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    safe_path = os.path.normpath(os.path.join(base_dir, path.lstrip("/")))
+    if not safe_path.startswith(base_dir):
+        raise HTTPException(status_code=400, detail="Access denied: path outside project root")
     try:
-        content = open(path, "r").read(1024)
+        content = open(safe_path, "r").read(1024)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc))
     return {"snippet": content}
+
+
+
+
+
+
 
